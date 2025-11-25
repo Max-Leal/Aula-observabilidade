@@ -1,7 +1,7 @@
 version: "3.9"
 
 services:
-  # 1. Exporter padrão para métricas do host (CPU, Memória, Disco)
+  # 1. Exporter Padrão do Host (Node Exporter)
   exporter:
     build:
       context: ./exporter
@@ -10,20 +10,23 @@ services:
     ports:
       - "9100:9100"
     volumes:
-      - /:/host:ro,rslave
+      # Monta o sistema de arquivos raiz do host para coletar métricas do SO
+      - /:/host:ro,rslave 
       - ./exporter/textfile:/etc/node-exporter/textfile
-    environment:
-      - NODE_EXPORTER_FLAGS=
+    command:
+      # Garante a coleta de métricas do sistema de arquivos
+      - '--path.rootfs=/host'
     networks:
       - monitor-net
 
-  # 2. Exporter para métricas de latência de rede (ping)
+  # 2. Exporter de Latência de Rede (Ping Exporter)
   ping-exporter:
     image: czerwonk/ping_exporter:latest
     container_name: obs-ping-exporter
     restart: unless-stopped
+    # NET_RAW é necessário para executar o ping dentro do contêiner
     cap_add:
-      - NET_RAW
+      - NET_RAW 
     environment:
       - CONFIG_FILE=/config/ping_exporter.yml
     ports:
@@ -35,40 +38,41 @@ services:
     networks:
       - monitor-net
 
-  # 3. Servidor de banco de dados PostgreSQL
-  postgres:
-    image: postgres:latest
-    container_name: obs-postgres
+  # 3. Servidor de Banco de Dados MySQL
+  mysql:
+    image: mysql:8.0
+    container_name: obs-mysql
     restart: always
     environment:
-      # Variável MANDATÓRIA para definir a senha do usuário 'postgres'
-      POSTGRES_PASSWORD: pass 
-      POSTGRES_USER: postgres
-      POSTGRES_DB: postgres
+      # Credenciais obrigatórias para inicialização do MySQL
+      MYSQL_ROOT_PASSWORD: root_pass
+      MYSQL_DATABASE: app_db
+      MYSQL_USER: myuser
+      MYSQL_PASSWORD: mypass
     ports:
-      - "5432:5432"
+      - "3306:3306"
     volumes:
-      # Garante que os dados do banco não serão perdidos ao reiniciar o container
-      - postgres-data:/var/lib/postgresql/data
+      # Persistência de dados do MySQL
+      - mysql-data:/var/lib/mysql 
     networks:
       - monitor-net
 
-  # 4. Exporter específico para PostgreSQL
-  postgres_exporter:
-    image: prometheuscommunity/postgres-exporter
-    container_name: obs-postgres-exporter
+  # 4. Exporter Específico para MySQL (mysqld-exporter)
+  mysql_exporter:
+    image: prom/mysqld-exporter
+    container_name: obs-mysql-exporter
     restart: always
     environment:
-      # String de conexão. O hostname 'postgres' é resolvido automaticamente pelo Docker
-      DATA_SOURCE_NAME: "postgresql://postgres:pass@postgres:5432/postgres?sslmode=disable"
+      # String de conexão do exporter. Usa o nome do serviço 'mysql' como hostname
+      DATA_SOURCE_NAME: "myuser:mypass@(mysql:3306)/app_db"
     ports:
-      - "9187:9187" # Porta padrão do exporter
+      - "9104:9104"
     depends_on:
-      - postgres # Garante que o banco suba antes do exporter
+      - mysql
     networks:
       - monitor-net
       
-  # 5. Prometheus - Coletor e Armazenador de Séries Temporais
+  # 5. Prometheus - Coletor e Armazenador
   prometheus:
     build:
       context: ./prometheus
@@ -78,15 +82,16 @@ services:
     depends_on:
       - exporter
       - ping-exporter
-      - postgres_exporter # Adicionado a dependência no novo exporter
+      - mysql_exporter # Dependência no MySQL Exporter
     ports:
       - "9090:9090"
     volumes:
-      - prometheus-data:/prometheus
+      # Volume para persistência das métricas do Prometheus
+      - prometheus-data:/prometheus 
     networks:
-      - monitor-net # Garante acesso aos exporters
+      - monitor-net
 
-  # 6. Grafana - Visualização de Dados
+  # 6. Grafana - Visualização
   grafana:
     build:
       context: ./grafana
@@ -96,6 +101,7 @@ services:
     ports:
       - "3300:3000"
     environment:
+      # Credenciais de acesso ao Grafana
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=admin
       - GF_USERS_ALLOW_SIGN_UP=false
@@ -103,15 +109,16 @@ services:
       - prometheus
     volumes:
       - grafana-data:/var/lib/grafana
-      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      # Provisão de fontes de dados e dashboards
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro 
       - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
     networks:
-      - monitor-net # Garante que ele possa ser acessado
+      - monitor-net
 
 volumes:
   prometheus-data:
   grafana-data:
-  postgres-data: 
+  mysql-data: # Volume nomeado para persistência do MySQL
 
 networks:
   monitor-net:
