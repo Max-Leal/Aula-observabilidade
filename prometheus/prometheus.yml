@@ -1,17 +1,28 @@
 global:
-  scrape_interval: 15s
+  scrape_interval: 15s # Raspa métricas a cada 15 segundos.
   evaluation_interval: 15s
 
 rule_files:
   - rules/*.yml
 
 scrape_configs:
+  # 1. Node Exporter (Métricas do Host)
   - job_name: node-exporter
     static_configs:
       - targets:
+          # Usa o nome do serviço Docker 'exporter'
           - "exporter:9100"
 
+  # 2. Ping Exporter (Métricas de Latência de Rede)
   - job_name: ping-exporter
     static_configs:
       - targets:
+          # Usa o nome do serviço Docker 'ping-exporter'
           - "ping-exporter:9427"
+          
+  # 3. MySQL Exporter (Métricas do Banco de Dados)
+  - job_name: mysql-exporter
+    static_configs:
+      - targets:
+          # Usa o nome do serviço Docker 'mysql_exporter' na porta 9104
+          - "mysql_exporter:9104"
