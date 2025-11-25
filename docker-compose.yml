@@ -1,8 +1,8 @@
 version: "3.9"
 
 services:
-  # SERVIÇOS EXISTENTES
-
+  # SERVIÇOS DE MONITORAMENTO EXISTENTES
+  
   exporter:
     build:
       context: ./exporter
@@ -40,7 +40,7 @@ services:
     depends_on:
       - exporter
       - ping-exporter
-      - mysql-exporter # NOVO: Dependência do MySQL Exporter
+      - mysql-exporter # Dependência do MySQL Exporter
     ports:
       - "9090:9090"
     volumes:
@@ -53,22 +53,21 @@ services:
     container_name: obs-grafana
     restart: unless-stopped
     ports:
-      - "3300:3000" # Porta 3300 para acesso direto ao Grafana
+      - "3300:3000" # Porta de acesso direto ao Grafana
     environment:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=admin
       - GF_USERS_ALLOW_SIGN_UP=false
+    # DEPENDÊNCIA CORRIGIDA: Não depende do Nginx para evitar o ciclo.
     depends_on:
       - prometheus
-      - nginx # NOVO: Dependência do Nginx (opcional, para garantir ordem)
     volumes:
       - grafana-data:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
 
-  # NOVOS SERVIÇOS DE BANCO DE DADOS E CARGA
-
-  # 1. Banco de Dados Relacional (MySQL)
+  # NOVOS SERVIÇOS (MYSQL E CARGA)
+  
   mysql:
     image: mysql:8.0
     container_name: obs-mysql
@@ -78,44 +77,44 @@ services:
       MYSQL_PASSWORD: password
       MYSQL_DATABASE: desafio_db
     volumes:
-      - mysql-data:/var/lib/mysql # Persistência
-      - ./db_init/init.sql:/docker-entrypoint-initdb.d/init.sql # Script de inicialização
+      - mysql-data:/var/lib/mysql 
+      - ./db_init/init.sql:/docker-entrypoint-initdb.d/init.sql 
     restart: always
 
-  # 2. Database Exporter (MySQL Exporter)
   mysql-exporter:
     image: prom/mysqld-exporter:latest
     container_name: obs-mysql-exporter
     environment:
-      # Conexão: user:password@(host:port)/database
+      # Credenciais para o Exporter
       DATA_SOURCE_NAME: user:password@(mysql:3306)/desafio_db
     restart: always
     depends_on:
       - mysql
-    # A porta 9104 é o endpoint de métricas que o Prometheus irá raspar.
+    # Prometheus faz o scrape interno na porta 9104
 
-  # 3. Gerador de Carga (Python/PyMySQL)
   load-generator:
-    build: ./load_generator # Requer Dockerfile, requirements.txt e load_generator.py na pasta
+    build: ./load_generator 
     container_name: obs-load-generator
     restart: always
     depends_on:
-      - mysql # Garante que o banco suba primeiro
+      - mysql # Garante que o banco suba antes do gerador de carga
   
-  # 4. Camada de Autenticação (Nginx Reverse Proxy)
+  # CAMADA DE SEGURANÇA (NGINX REVERSE PROXY)
+
   nginx:
     image: nginx:alpine
     container_name: obs-nginx-proxy
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro # Configuração do Nginx
-      - ./nginx/.htpasswd:/etc/nginx/.htpasswd:ro # Arquivo de senha
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro # Configuração
+      - ./nginx/.htpasswd:/etc/nginx/.htpasswd:ro # Autenticação
     ports:
-      - "443:443" # Porta de acesso seguro/autenticado
+      - "443:443" # Porta de acesso autenticado (HTPASSWD)
     depends_on:
-      - grafana 
+      - grafana # Nginx espera o Grafana estar pronto para fazer o proxy
     restart: unless-stopped
 
+# VOLUMES
 volumes:
   prometheus-data:
   grafana-data:
-  mysql-data: # NOVO: Volume para persistência do MySQL
+  mysql-data: # Volume para persistência do MySQL
