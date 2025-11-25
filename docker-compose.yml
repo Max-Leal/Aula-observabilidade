@@ -1,6 +1,7 @@
 version: "3.9"
 
 services:
+  # 1. Exporter padrão para métricas do host (CPU, Memória, Disco)
   exporter:
     build:
       context: ./exporter
@@ -13,7 +14,10 @@ services:
       - ./exporter/textfile:/etc/node-exporter/textfile
     environment:
       - NODE_EXPORTER_FLAGS=
+    networks:
+      - monitor-net
 
+  # 2. Exporter para métricas de latência de rede (ping)
   ping-exporter:
     image: czerwonk/ping_exporter:latest
     container_name: obs-ping-exporter
@@ -28,7 +32,43 @@ services:
       - ./ping-exporter/ping_exporter.yml:/config/ping_exporter.yml:ro
     depends_on:
       - exporter
+    networks:
+      - monitor-net
 
+  # 3. Servidor de banco de dados PostgreSQL
+  postgres:
+    image: postgres:latest
+    container_name: obs-postgres
+    restart: always
+    environment:
+      # Variável MANDATÓRIA para definir a senha do usuário 'postgres'
+      POSTGRES_PASSWORD: pass 
+      POSTGRES_USER: postgres
+      POSTGRES_DB: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      # Garante que os dados do banco não serão perdidos ao reiniciar o container
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - monitor-net
+
+  # 4. Exporter específico para PostgreSQL
+  postgres_exporter:
+    image: prometheuscommunity/postgres-exporter
+    container_name: obs-postgres-exporter
+    restart: always
+    environment:
+      # String de conexão. O hostname 'postgres' é resolvido automaticamente pelo Docker
+      DATA_SOURCE_NAME: "postgresql://postgres:pass@postgres:5432/postgres?sslmode=disable"
+    ports:
+      - "9187:9187" # Porta padrão do exporter
+    depends_on:
+      - postgres # Garante que o banco suba antes do exporter
+    networks:
+      - monitor-net
+      
+  # 5. Prometheus - Coletor e Armazenador de Séries Temporais
   prometheus:
     build:
       context: ./prometheus
@@ -38,11 +78,15 @@ services:
     depends_on:
       - exporter
       - ping-exporter
+      - postgres_exporter # Adicionado a dependência no novo exporter
     ports:
       - "9090:9090"
     volumes:
       - prometheus-data:/prometheus
+    networks:
+      - monitor-net # Garante acesso aos exporters
 
+  # 6. Grafana - Visualização de Dados
   grafana:
     build:
       context: ./grafana
@@ -61,35 +105,13 @@ services:
       - grafana-data:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
-
-  postgres:
-      image: postgres:latest
-      container_name: some-postgres
-      restart: always
-      environment:
-        POSTGRES_PASSWORD: pass
-      ports:
-        - "5432:5432"
-      networks:
-        - monitor-net # Garante que ele esteja na mesma rede que o exporter
-
-  postgres_exporter:
-      image: prometheuscommunity/postgres-exporter
-      container_name: postgres_exporter
-      restart: always
-      environment:
-        # A string de conexão. O nome 'postgres' deve ser resolvido pelo Docker
-        DATA_SOURCE_NAME: "postgresql://postgres:pass@postgres:5432/postgres?sslmode=disable"
-      ports:
-        - "9187:9187" # Porta padrão do exporter
-      depends_on:
-        - postgres
-      networks:
-        - monitor-net
+    networks:
+      - monitor-net # Garante que ele possa ser acessado
 
 volumes:
   prometheus-data:
   grafana-data:
+  postgres-data: 
 
 networks:
   monitor-net:
