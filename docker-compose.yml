@@ -62,6 +62,35 @@ services:
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
 
+  postgres:
+      image: postgres:latest
+      container_name: some-postgres
+      restart: always
+      environment:
+        POSTGRES_PASSWORD: pass
+      ports:
+        - "5432:5432"
+      networks:
+        - monitor-net # Garante que ele esteja na mesma rede que o exporter
+
+  postgres_exporter:
+      image: prometheuscommunity/postgres-exporter
+      container_name: postgres_exporter
+      restart: always
+      environment:
+        # A string de conexão. O nome 'postgres' deve ser resolvido pelo Docker
+        DATA_SOURCE_NAME: "postgresql://postgres:pass@postgres:5432/postgres?sslmode=disable"
+      ports:
+        - "9187:9187" # Porta padrão do exporter
+      depends_on:
+        - postgres
+      networks:
+        - monitor-net
+
 volumes:
   prometheus-data:
   grafana-data:
+
+networks:
+  monitor-net:
+    driver: bridge

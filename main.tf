@@ -55,8 +55,6 @@ resource "aws_instance" "instance-max" {
               git clone https://github.com/Max-Leal/Aula-observabilidade.git
               cd ./Aula-observabilidade
               docker-compose up -d
-              docker run --name some-postgres -e POSTGRES_PASSWORD=pass -p 5432:5432 -d postgres
-
               EOF
   )
 
