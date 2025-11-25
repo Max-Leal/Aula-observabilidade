@@ -11,22 +11,23 @@ services:
       - "9100:9100"
     volumes:
       # Monta o sistema de arquivos raiz do host para coletar métricas do SO
-      - /:/host:ro,rslave 
+      - /:/host:ro,rslave
       - ./exporter/textfile:/etc/node-exporter/textfile
     command:
-      # Garante a coleta de métricas do sistema de arquivos
-      - '--path.rootfs=/host'
+      # Configuração para ler as métricas do sistema de arquivos montado
+      - '--path.rootfs=/host' 
+    environment:
+      - NODE_EXPORTER_FLAGS=
     networks:
-      - monitor-net
+      - monitor-net # Adicionado: Garante comunicação interna por nome
 
   # 2. Exporter de Latência de Rede (Ping Exporter)
   ping-exporter:
     image: czerwonk/ping_exporter:latest
     container_name: obs-ping-exporter
     restart: unless-stopped
-    # NET_RAW é necessário para executar o ping dentro do contêiner
     cap_add:
-      - NET_RAW 
+      - NET_RAW
     environment:
       - CONFIG_FILE=/config/ping_exporter.yml
     ports:
@@ -36,9 +37,9 @@ services:
     depends_on:
       - exporter
     networks:
-      - monitor-net
+      - monitor-net # Adicionado: Garante comunicação interna por nome
 
-  # 3. Servidor de Banco de Dados MySQL
+  # 3. Servidor de Banco de Dados MySQL (NOVO)
   mysql:
     image: mysql:8.0
     container_name: obs-mysql
@@ -55,23 +56,23 @@ services:
       # Persistência de dados do MySQL
       - mysql-data:/var/lib/mysql 
     networks:
-      - monitor-net
+      - monitor-net # Essencial para o exporter se conectar usando o nome 'mysql'
 
-  # 4. Exporter Específico para MySQL (mysqld-exporter)
+  # 4. Exporter Específico para MySQL (NOVO)
   mysql_exporter:
     image: prom/mysqld-exporter
     container_name: obs-mysql-exporter
     restart: always
     environment:
-      # String de conexão do exporter. Usa o nome do serviço 'mysql' como hostname
+      # String de conexão: user:pass@(hostname:port)/database
       DATA_SOURCE_NAME: "myuser:mypass@(mysql:3306)/app_db"
     ports:
       - "9104:9104"
     depends_on:
       - mysql
     networks:
-      - monitor-net
-      
+      - monitor-net # Garante que ele veja o Prometheus e o MySQL
+
   # 5. Prometheus - Coletor e Armazenador
   prometheus:
     build:
@@ -82,14 +83,13 @@ services:
     depends_on:
       - exporter
       - ping-exporter
-      - mysql_exporter # Dependência no MySQL Exporter
+      - mysql_exporter # Adicionado: Dependência no novo exporter
     ports:
       - "9090:9090"
     volumes:
-      # Volume para persistência das métricas do Prometheus
-      - prometheus-data:/prometheus 
+      - prometheus-data:/prometheus
     networks:
-      - monitor-net
+      - monitor-net # Adicionado: Garante que ele veja todos os exporters
 
   # 6. Grafana - Visualização
   grafana:
@@ -101,7 +101,6 @@ services:
     ports:
       - "3300:3000"
     environment:
-      # Credenciais de acesso ao Grafana
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=admin
       - GF_USERS_ALLOW_SIGN_UP=false
@@ -109,17 +108,16 @@ services:
       - prometheus
     volumes:
       - grafana-data:/var/lib/grafana
-      # Provisão de fontes de dados e dashboards
-      - ./grafana/provisioning:/etc/grafana/provisioning:ro 
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
     networks:
-      - monitor-net
+      - monitor-net # Adicionado: Garante que ele veja o Prometheus
 
 volumes:
   prometheus-data:
   grafana-data:
-  mysql-data: # Volume nomeado para persistência do MySQL
+  mysql-data: # NOVO: Volume nomeado para persistência do MySQL
 
 networks:
-  monitor-net:
+  monitor-net: # NOVO: Definição da rede para comunicação interna
     driver: bridge
