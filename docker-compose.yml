@@ -107,11 +107,13 @@ services:
     depends_on:
       - postgres
 
-  # GERADOR DE CARGA
-  loadgen:
+  # GERADOR DE CARGA (CORRIGIDO)
+  load-generator:
     build:
-      context: ./loadgen
-    container_name: obs-loadgen
+      # CORRIGIDO: usa o nome da sua pasta
+      context: ./load_generator
+    # CORRIGIDO: nome do contêiner mais consistente
+    container_name: obs-load-generator
     environment:
       # Variáveis de ambiente consistentes com o serviço 'postgres'
       DB_HOST: postgres
@@ -127,6 +129,7 @@ services:
       UPDATE_RATIO: 0.2
       DELETE_RATIO: 0.1
       TABLE_NAME: loadgen_events
+    # CORRIGIDO: depende do novo nome do serviço (load-generator)
     depends_on:
       - postgres
     restart: unless-stopped
