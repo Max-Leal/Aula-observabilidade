@@ -51,7 +51,8 @@ resource "aws_instance" "instance-max" {
   user_data = base64encode(<<-EOF
               #!/bin/bash
               apt update -y
-              apt install -y git docker.io docker-compose
+              apt install -y git docker.io docker-compose openssh-server
+              systemctl enable --now ssh
               git clone https://github.com/Max-Leal/Aula-observabilidade.git
               cd ./Aula-observabilidade
               docker-compose up -d
