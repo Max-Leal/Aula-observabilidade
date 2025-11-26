@@ -65,40 +65,40 @@ services:
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
   
-  mysql:
-    image: mysql:8.0
-    container_name: obs-mysql
+  postgres:
+    image: postgres:15-alpine # Imagem oficial do PostgreSQL
+    container_name: obs-postgres
     environment:
-      MYSQL_ROOT_PASSWORD: rootpassword
-      MYSQL_USER: user
-      MYSQL_PASSWORD: password
-      MYSQL_DATABASE: desafio_db
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: desafio_db
     volumes:
-      - mysql-data:/var/lib/mysql 
-      - ./db_init/init.sql:/docker-entrypoint-initdb.d/init.sql 
+      - postgres-data:/var/lib/postgresql/data
+      - ./db_init/init.sql:/docker-entrypoint-initdb.d/init.sql # Mantenha o init
     restart: always
 
-  mysql-exporter:
-    image: prom/mysqld-exporter:latest
-    container_name: obs-mysql-exporter
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:latest
+    container_name: obs-postgres-exporter
     environment:
-      DATA_SOURCE_NAME: user:password@(mysql:3306)/desafio_db
+      # O DSN (Data Source Name) deve apontar para o host 'postgres'
+      DATA_SOURCE_NAME: postgresql://user:password@postgres:5432/desafio_db?sslmode=disable
     restart: always
     depends_on:
-      - mysql
-    # NOVO ENTRYPOINT/COMMAND: Usamos um script wrapper para garantir que o MySQL esteja pronto.
-    # Neste caso, vamos usar o ponto de entrada da imagem e um atraso robusto.
-    entrypoint: [ "/bin/sh", "-c" ]
+      - postgres
+    # Atraso para garantir que o Postgres esteja pronto
     command:
-      - "sleep 15 && /bin/mysqld_exporter"
-    # Prometheus faz o scrape interno na porta 9104
+      - "sh"
+      - "-c"
+      - "sleep 15 && /usr/bin/postgres_exporter"
+    # O Prometheus fará o scrape na porta 9187 (padrão do postgres-exporter)
 
   load-generator:
     build: ./load_generator 
     container_name: obs-load-generator
     restart: always
     depends_on:
-      - mysql # Garante que o banco suba antes do gerador de carga
+      - mysql 
   
   # CAMADA DE SEGURANÇA (NGINX REVERSE PROXY)
 
@@ -118,4 +118,4 @@ services:
 volumes:
   prometheus-data:
   grafana-data:
-  mysql-data:
+  postgres-data:
