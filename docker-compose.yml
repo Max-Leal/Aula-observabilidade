@@ -1,6 +1,8 @@
 version: "3.9"
 
 services:
+  # SERVIÇOS DE MONITORAMENTO BASE
+  
   exporter:
     build:
       context: ./exporter
@@ -35,14 +37,18 @@ services:
     image: obs-prometheus
     container_name: obs-prometheus
     restart: unless-stopped
+    # DEPENDÊNCIA ATUALIZADA: inclui o postgres-exporter
     depends_on:
       - exporter
       - ping-exporter
+      - postgres-exporter 
     ports:
       - "9090:9090"
     volumes:
       - prometheus-data:/prometheus
+      # Mapeamento do arquivo de configuração do Prometheus
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+
   grafana:
     build:
       context: ./grafana
@@ -62,43 +68,52 @@ services:
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
 
-
+  # SERVIÇOS POSTGRESQL (ADAPTADO DO AMIGO)
   postgres:
     image: postgres:15
     container_name: obs-postgres
     restart: unless-stopped
     environment:
+      # Credenciais usadas pelo Exporter e Loadgen
       POSTGRES_USER: grafana
       POSTGRES_PASSWORD: grafana123
       POSTGRES_DB: grafana_db
+    # Porta opcional para acesso externo, mantida
     ports:
-      - "5432:5432"   # opcional, só se quiser acessar de fora
+      - "5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
+      # Adicionando o script de inicialização
+      - ./db_init/init.sql:/docker-entrypoint-initdb.d/init.sql 
     networks:
-      - default  
-
+      - default 
+  
   postgres-exporter:
     image: prometheuscommunity/postgres-exporter
     container_name: obs-postgres-exporter
     restart: unless-stopped
     environment:
+      # DSN (Data Source Name) usando as credenciais do serviço 'postgres'
       DATA_SOURCE_NAME: "postgresql://grafana:grafana123@postgres:5432/grafana_db?sslmode=disable"
+    # Porta mapeada para debug
     ports:
       - "9187:9187"
     volumes:
-    - ./queries.yaml:/etc/postgres_exporter/queries.yaml
+      # Volume necessário para carregar o arquivo de queries
+      - ./postgres-exporter/queries.yaml:/etc/postgres_exporter/queries.yaml
+    # Comando para usar o arquivo de queries
     command:
-    - "--extend.query-path=/etc/postgres_exporter/queries.yaml"
-  
+      - "--extend.query-path=/etc/postgres_exporter/queries.yaml"
     depends_on:
-    - postgres
+      - postgres
 
+  # GERADOR DE CARGA
   loadgen:
     build:
       context: ./loadgen
     container_name: obs-loadgen
     environment:
+      # Variáveis de ambiente consistentes com o serviço 'postgres'
       DB_HOST: postgres
       DB_PORT: 5432
       DB_NAME: grafana_db
@@ -116,7 +131,7 @@ services:
       - postgres
     restart: unless-stopped
 
-
+# VOLUMES (atualizado para postgres-data)
 volumes:
   prometheus-data:
   grafana-data:
