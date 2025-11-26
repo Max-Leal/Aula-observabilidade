@@ -1,7 +1,7 @@
 version: "3.9"
 
 services:
-  # SERVIÇOS DE MONITORAMENTO EXISTENTES
+  # SERVIÇOS DE MONITORAMENTO 
   
   exporter:
     build:
@@ -58,15 +58,12 @@ services:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=admin
       - GF_USERS_ALLOW_SIGN_UP=false
-    # DEPENDÊNCIA CORRIGIDA: Não depende do Nginx para evitar o ciclo.
     depends_on:
       - prometheus
     volumes:
       - grafana-data:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
-
-  # NOVOS SERVIÇOS (MYSQL E CARGA)
   
   mysql:
     image: mysql:8.0
@@ -105,20 +102,20 @@ services:
   
   # CAMADA DE SEGURANÇA (NGINX REVERSE PROXY)
 
-  nginx:
-    image: nginx:alpine
-    container_name: obs-nginx-proxy
-    volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro # Configuração
-      - ./nginx/.htpasswd:/etc/nginx/.htpasswd:ro # Autenticação
-    ports:
-      - "443:443" # Porta de acesso autenticado (HTPASSWD)
-    depends_on:
-      - grafana # Nginx espera o Grafana estar pronto para fazer o proxy
-    restart: unless-stopped
+  # nginx:
+  #   image: nginx:alpine
+  #   container_name: obs-nginx-proxy
+  #   volumes:
+  #     - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro # Configuração
+  #     - ./nginx/.htpasswd:/etc/nginx/.htpasswd:ro # Autenticação
+  #   ports:
+  #     - "443:443" # Porta de acesso autenticado (HTPASSWD)
+  #   depends_on:
+  #     - grafana # Nginx espera o Grafana estar pronto para fazer o proxy
+  #   restart: unless-stopped
 
 # VOLUMES
 volumes:
   prometheus-data:
   grafana-data:
-  mysql-data: # Volume para persistência do MySQL
+  mysql-data:
