@@ -1,16 +1,15 @@
 FROM python:3.10-alpine
 
-# Instalação de dependências do sistema operacional para PyMySQL
-# (Embora PyMySQL seja puro Python, é bom ter certeza)
+# Atualiza e instala ferramentas de build, apenas para garantir compatibilidade em Alpine
 RUN apk update && apk add --no-cache gcc musl-dev
 
 WORKDIR /app
 
+# Copia os arquivos
 COPY requirements.txt .
 COPY load_generator.py .
 
-# Instala as dependências Python (PyMySQL)
+# Instala PyMySQL
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Comando de execução
 CMD ["python", "load_generator.py"]

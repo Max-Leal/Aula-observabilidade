@@ -90,6 +90,7 @@ services:
     restart: always
     depends_on:
       - mysql
+    command: sh -c "sleep 10 && /bin/mysqld_exporter"
     # Prometheus faz o scrape interno na porta 9104
 
   load-generator:
